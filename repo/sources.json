@@ -1,0 +1,40 @@
+{
+  "name": "Wavelet sample repo",
+  "description": "Example repo index. Host this file anywhere (GitHub raw, GitLab raw, your own server) and add its URL in Sources > Add repo.",
+  "sources": [
+    {
+      "id": "jamendo",
+      "engine": "jamendo",
+      "name": "Jamendo",
+      "version": "1.0",
+      "description": "Free Creative Commons music. Paste your free client ID after installing.",
+      "options": { "client_id": "" }
+    },
+    {
+      "id": "radio_browser",
+      "engine": "radio_browser",
+      "name": "Radio Browser",
+      "version": "1.0"
+    },
+    {
+      "id": "internet_archive",
+      "engine": "internet_archive",
+      "name": "Internet Archive",
+      "version": "1.0"
+    },
+    {
+      "id": "family-navidrome",
+      "engine": "subsonic",
+      "name": "Family Navidrome",
+      "version": "1.0",
+      "description": "Pre-filled server address; each user enters their own login.",
+      "options": { "url": "https://music.example.com" }
+    },
+    {
+      "id": "lrclib",
+      "engine": "lrclib",
+      "name": "LRCLIB lyrics",
+      "version": "1.0"
+    }
+  ]
+}
