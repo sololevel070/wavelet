@@ -12,4 +12,7 @@ captures/
 .mcp.json
 
 # Design reference (not shipped in the app)
-"Spotify - Mobile UI Kit"/
+"UI kit"/
+
+# Built APK (distributed via GitHub Releases)
+*.apk

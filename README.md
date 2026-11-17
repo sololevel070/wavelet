@@ -4,9 +4,25 @@ An open-source Android music player (Kotlin + Jetpack Compose) with a Spotify-st
 
 Written from scratch; no Soundbound or Spotify code is used. The Spotify Mobile UI Kit was used only as a visual reference — Wavelet has its own design and violet accent (#8B7CFF).
 
+## Download
+
+[![Download Wavelet APK](https://img.shields.io/badge/Download-Wavelet%20APK-8B7CFF?style=for-the-badge&logo=android)](https://github.com/sololevel070/wavelet/releases/latest/download/Wavelet-debug.apk)
+
+[![Get it on GitHub Releases](https://img.shields.io/badge/Releases-Wavelet%20v0.4.0-8B7CFF?style=for-the-badge&logo=github)](https://github.com/sololevel070/wavelet/releases)
+
+> Install the latest debug build directly. Enable "Install from unknown sources" on your device before installing.
+
 ## Screenshots
 
-> Screenshots of the running app coming soon. In the meantime, the UI follows the Spotify-style layout: bottom navigation (Home, Search, Your Library), artwork-tinted Now Playing and mini player, and a dark-first theme with violet (#8B7CFF) accents.
+| Welcome | Home | On This Device |
+|---------|------|----------------|
+| ![Welcome](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/01-welcome.png) | ![Home](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/02-home.png) | ![On This Device](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/03-on-this-device.png) |
+
+| Now Playing | Folder Playlist | Search |
+|-------------|-----------------|--------|
+| ![Now Playing](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/04-now-playing.png) | ![Folder Playlist](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/05-folder-playlist.png) | ![Search](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/06-search.png) |
+
+The UI follows a Spotify-style layout: bottom navigation (Home, Search, Your Library), artwork-tinted Now Playing and mini player, and a dark-first theme with violet (#8B7CFF) accents.
 
 ## Features
 
