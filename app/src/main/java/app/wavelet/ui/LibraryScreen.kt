@@ -1,5 +1,7 @@
 package app.wavelet.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.FileUpload
@@ -65,6 +68,10 @@ fun LibraryScreen(vm: MainViewModel, nav: NavHostController, onRequestPermission
     var sortMenu by rememberSaveable { mutableStateOf(false) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var grid by rememberSaveable { mutableStateOf(false) }
+    var addMenu by rememberSaveable { mutableStateOf(false) }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let { vm.addFolderPlaylist(it) { id -> nav.navigate(Routes.playlist(id)) } }
+    }
 
     val libraryTracks = (local.tracks + downloads).filterNot { it.isLive }
     val albums = libraryTracks.filter { !it.album.isNullOrBlank() }.groupBy { it.album!! }
@@ -83,8 +90,14 @@ fun LibraryScreen(vm: MainViewModel, nav: NavHostController, onRequestPermission
                 ) { Text("W", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium) }
                 Spacer(Modifier.width(12.dp))
                 Text("Your Library", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                IconButton(onClick = { nav.navigate(Routes.IMPORT) }) { Icon(Icons.Rounded.FileUpload, "Import a playlist") }
-                IconButton(onClick = { creating = true }) { Icon(Icons.Rounded.Add, "Create playlist") }
+                Box {
+                    IconButton(onClick = { addMenu = true }) { Icon(Icons.Rounded.Add, "Add") }
+                    DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                        DropdownMenuItem(text = { Text("New playlist") }, leadingIcon = { Icon(Icons.Rounded.Add, null) }, onClick = { addMenu = false; creating = true })
+                        DropdownMenuItem(text = { Text("Add music folder") }, leadingIcon = { Icon(Icons.Rounded.CreateNewFolder, null) }, onClick = { addMenu = false; folderPicker.launch(null) })
+                        DropdownMenuItem(text = { Text("Import a playlist") }, leadingIcon = { Icon(Icons.Rounded.FileUpload, null) }, onClick = { addMenu = false; nav.navigate(Routes.IMPORT) })
+                    }
+                }
                 IconButton(onClick = { nav.navigate(Routes.SETTINGS) }) { Icon(Icons.Rounded.Settings, "Settings") }
             }
         }
@@ -182,7 +195,7 @@ fun LibraryScreen(vm: MainViewModel, nav: NavHostController, onRequestPermission
             }
             LibFilter.Downloaded -> {
                 if (downloads.isEmpty()) item { EmptyState(Icons.Rounded.CloudDownload, "Nothing downloaded", "Use Download in a song's menu to play it without a connection.") }
-                items(downloads, key = { "d${it.key}" }) { t -> SongRow(vm, t, onClick = { vm.play(t, downloads) }) }
+                items(downloads, key = { "d${it.key}" }) { t -> SongRow(vm, t, onClick = { vm.play(t, downloads) }, modifier = Modifier.animateItem()) }
             }
         }
     }

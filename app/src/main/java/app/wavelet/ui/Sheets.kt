@@ -89,6 +89,7 @@ fun GlobalSheets(vm: MainViewModel, nav: NavHostController) {
     val links by vm.links.collectAsStateWithLifecycle()
     val import by vm.import.collectAsStateWithLifecycle()
     val fix by vm.fixMatch.collectAsStateWithLifecycle()
+    val busy by vm.busy.collectAsStateWithLifecycle()
     val showEq by vm.showEqualizer.collectAsStateWithLifecycle()
 
     options?.let { TrackOptionsSheet(vm, nav, it) }
@@ -96,6 +97,7 @@ fun GlobalSheets(vm: MainViewModel, nav: NavHostController) {
     links?.let { LinksDialog(it, vm::closeLinks) }
     import?.let { ImportProgressDialog(vm, nav, it) }
     fix?.let { FixMatchSheet(vm, it) }
+    busy?.let { BusyDialog(it) }
     if (showEq) EqualizerSheet(vm, onClose = vm::closeEqualizer)
 }
 
@@ -320,7 +322,7 @@ private fun ImportProgressDialog(vm: MainViewModel, nav: NavHostController, stat
                         Text("${state.matched} of ${state.total} songs matched ($pct%).")
                         if (state.matched < state.total) {
                             Text(
-                                "Unmatched songs are kept in the playlist. Open it and tap a song marked \"Not found\" to pick a match, or add more sources in Settings › Sources.",
+                                "Unmatched songs are kept in the playlist. Open it and tap a song marked \"Not found\" to pick a match, or use ⋮ › Re-scan after adding more music or sources.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -497,4 +499,25 @@ fun EqualizerSheet(vm: MainViewModel, onClose: () -> Unit) {
             Spacer(Modifier.size(16.dp))
         }
     }
+}
+
+/** Progress dialog for long tasks (folder scan, re-scan, ZIP). It can't be dismissed while it runs. */
+@Composable
+private fun BusyDialog(state: BusyState) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(state.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (state.message.isNotBlank()) Text(state.message)
+                if (state.total > 0) {
+                    LinearProgressIndicator(progress = { state.done.toFloat() / state.total }, modifier = Modifier.fillMaxWidth())
+                    Text("${state.done} of ${state.total}", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+            }
+        },
+        confirmButton = {},
+    )
 }

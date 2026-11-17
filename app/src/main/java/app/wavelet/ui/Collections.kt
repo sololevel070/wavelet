@@ -30,6 +30,8 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FolderZip
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.History
@@ -151,7 +153,7 @@ private fun TrackCollection(
             )
         }
         if (tracks.isEmpty()) item { empty() }
-        items(tracks, key = { it.key }) { t -> SongRow(vm, t, onClick = { vm.play(t, tracks) }) }
+        items(tracks, key = { it.key }) { t -> SongRow(vm, t, onClick = { vm.play(t, tracks) }, modifier = Modifier.animateItem()) }
         extra()
     }
 }
@@ -246,7 +248,7 @@ fun HistoryScreen(vm: MainViewModel, nav: NavHostController) {
         }
         if (history.isEmpty()) item { EmptyState(Icons.Rounded.History, "Nothing played yet", "Songs you listen to appear here.") }
         itemsIndexed(history, key = { _, h -> h.historyId }) { i, h ->
-            SongRow(vm, h.track, onClick = { vm.playList(tracks, i) }, subtitle = "${h.track.artist} · ${fmt.format(Date(h.playedAt))}")
+            SongRow(vm, h.track, modifier = Modifier.animateItem(), onClick = { vm.playList(tracks, i) }, subtitle = "${h.track.artist} · ${fmt.format(Date(h.playedAt))}")
         }
     }
     if (confirmClear) {
@@ -283,6 +285,9 @@ fun PlaylistScreen(vm: MainViewModel, nav: NavHostController, playlistId: Long) 
     val tracks = items.mapNotNull { it.track }
     val unmatched = items.count { it.track == null }
 
+    val zipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        uri?.let { vm.exportPlaylistZip(playlistId, it) }
+    }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         val f = exportFormat
         if (uri != null && f != null) vm.exportPlaylist(playlistId, f, uri)
@@ -333,7 +338,10 @@ fun PlaylistScreen(vm: MainViewModel, nav: NavHostController, playlistId: Long) 
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Edit details") }, leadingIcon = { Icon(Icons.Rounded.Edit, null) }, onClick = { menu = false; renaming = true })
                             DropdownMenuItem(text = { Text("Add to queue") }, leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) }, onClick = { menu = false; vm.enqueue(tracks, playNext = false) })
-                            DropdownMenuItem(text = { Text("Export…") }, leadingIcon = { Icon(Icons.Rounded.FileDownload, null) }, onClick = { menu = false; choosingFormat = true })
+                            if (p.folderUri != null) DropdownMenuItem(text = { Text("Sync folder") }, leadingIcon = { Icon(Icons.Rounded.Sync, null) }, onClick = { menu = false; vm.syncFolder(playlistId) })
+                            if (unmatched > 0) DropdownMenuItem(text = { Text("Re-scan $unmatched missing songs") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, onClick = { menu = false; vm.rescanUnmatched(playlistId) })
+                            DropdownMenuItem(text = { Text("Export as ZIP…") }, leadingIcon = { Icon(Icons.Rounded.FolderZip, null) }, onClick = { menu = false; zipLauncher.launch("${p.name.replace(Regex("""[\\/:*?"<>|]"""), "_")}.zip") })
+                            DropdownMenuItem(text = { Text("Export song list…") }, leadingIcon = { Icon(Icons.Rounded.FileDownload, null) }, onClick = { menu = false; choosingFormat = true })
                             DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Rounded.Share, null) }, onClick = {
                                 menu = false
                                 scope.launch {
@@ -392,7 +400,7 @@ fun PlaylistScreen(vm: MainViewModel, nav: NavHostController, playlistId: Long) 
         itemsIndexed(shownItems, key = { _, it -> it.itemId }) { index, item ->
             val track = item.track
             if (editing && canEditOrder) {
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.animateItem().fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Artwork(track?.artworkUrl, Modifier.size(44.dp), corner = 4.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -404,10 +412,10 @@ fun PlaylistScreen(vm: MainViewModel, nav: NavHostController, playlistId: Long) 
                     IconButton(onClick = { vm.removeFromPlaylist(playlistId, item.itemId) }) { Icon(Icons.Rounded.Delete, "Remove") }
                 }
             } else if (track != null) {
-                SongRow(vm, track, onClick = { vm.playPlaylist(items, item) }, playlistId = playlistId, itemId = item.itemId)
+                SongRow(vm, track, onClick = { vm.playPlaylist(items, item) }, playlistId = playlistId, itemId = item.itemId, modifier = Modifier.animateItem())
             } else {
                 Row(
-                    Modifier.fillMaxWidth().clickable { vm.openFixMatch(playlistId, item) }.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+                    Modifier.animateItem().fillMaxWidth().clickable(onClickLabel = "Find a match") { vm.openFixMatch(playlistId, item) }.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.size(50.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {

@@ -254,7 +254,7 @@ fun SettingsScreen(vm: MainViewModel, nav: NavHostController) {
         item { NavRow(Icons.Rounded.Restore, "Restore from backup", "Adds the backup's playlists and likes to this phone") { restoreLauncher.launch(arrayOf("application/json", "*/*")) } }
 
         item { Group("About") }
-        item { NavRow(Icons.Rounded.Info, "Wavelet 0.3.0", "An open music player for legal, open sources", showArrow = false) {} }
+        item { NavRow(Icons.Rounded.Info, "About Wavelet", "Version, credits and the welcome tour") { nav.navigate(Routes.ABOUT) } }
     }
 
     if (lbDialog) ListenBrainzDialog(vm, settings.listenBrainzUser, connecting, onClose = { lbDialog = false })

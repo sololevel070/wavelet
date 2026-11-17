@@ -5,3 +5,11 @@ local.properties
 *.iml
 .kotlin/
 captures/
+.android-sdk/
+
+# Kilo agent config (not part of the app)
+.agent/
+.mcp.json
+
+# Design reference (not shipped in the app)
+"Spotify - Mobile UI Kit"/

@@ -1,5 +1,28 @@
 package app.wavelet.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Velocity
+import kotlinx.coroutines.launch
 import android.content.Intent
 import android.media.audiofx.AudioEffect
 import androidx.compose.animation.animateColorAsState
@@ -48,6 +71,12 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -83,7 +112,14 @@ import app.wavelet.source.LyricLine
 import app.wavelet.source.Track
 
 @Composable
-fun NowPlayingScreen(vm: MainViewModel, track: Track, player: PlayerUiState, onClose: () -> Unit, onOpenArtist: (String) -> Unit) {
+fun NowPlayingScreen(
+    vm: MainViewModel,
+    track: Track,
+    player: PlayerUiState,
+    onClose: () -> Unit,
+    onOpenArtist: (String) -> Unit,
+    artModifier: Modifier = Modifier,
+) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val liked by vm.likedKeys.collectAsStateWithLifecycle()
     val lyricsState by vm.lyrics.collectAsStateWithLifecycle()
@@ -92,133 +128,253 @@ fun NowPlayingScreen(vm: MainViewModel, track: Track, player: PlayerUiState, onC
     var fullLyrics by rememberSaveable { mutableStateOf(false) }
     val isLiked = track.key in liked
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
 
     val tint = if (settings.artworkColors) rememberArtworkColor(track.artworkUrl) else null
     val top by animateColorAsState(tint?.compositeOver(Color.Black) ?: Color(0xFF2E2766), label = "npTop")
     val textColor = Color.White
     val soft = Color.White.copy(alpha = 0.7f)
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(top, top.copy(alpha = 0.6f).compositeOver(Color(0xFF121212)), Color(0xFF121212))))
-            .clickable(enabled = false) {},
-    ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 24.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Rounded.KeyboardArrowDown, "Close", tint = textColor, modifier = Modifier.size(30.dp)) }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("PLAYING FROM", style = MaterialTheme.typography.labelSmall, color = soft)
-                    Text(vm.sourceName(track.sourceId), style = MaterialTheme.typography.labelLarge, color = textColor, maxLines = 1)
+    // ---- Swipe down to close. Works with the scrolling content: once the page is scrolled to the
+    // top, pulling further down drags the whole player; letting go past the threshold closes it.
+    val dragY = remember { Animatable(0f) }
+    val closeThreshold = with(density) { 140.dp.toPx() }
+    val dismissConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // While the player is pulled down, an upward drag first pushes it back up.
+                if (dragY.value > 0f && available.y < 0f && source == NestedScrollSource.UserInput) {
+                    val used = maxOf(available.y, -dragY.value)
+                    scope.launch { dragY.snapTo(dragY.value + used) }
+                    return Offset(0f, used)
                 }
-                IconButton(onClick = { vm.showOptions(track) }) { Icon(Icons.Rounded.MoreVert, "More", tint = textColor) }
+                return Offset.Zero
             }
 
-            Spacer(Modifier.height(28.dp))
-            Artwork(
-                track.artworkUrl,
-                Modifier.fillMaxWidth().aspectRatio(1f),
-                live = track.isLive,
-                corner = 8.dp,
-            )
-            Spacer(Modifier.height(28.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(track.title, style = MaterialTheme.typography.headlineSmall, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        track.artist,
-                        style = MaterialTheme.typography.titleMedium, color = soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable(enabled = !track.isLive && track.artist.isNotBlank()) { onOpenArtist(track.artist) },
-                    )
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f && source == NestedScrollSource.UserInput) {
+                    scope.launch { dragY.snapTo(dragY.value + available.y) }
+                    return Offset(0f, available.y)
                 }
-                if (!track.isLive) IconButton(onClick = { vm.toggleLike(track) }) {
-                    Icon(
-                        if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        if (isLiked) "Remove from Liked Songs" else "Add to Liked Songs",
-                        tint = if (isLiked) MaterialTheme.colorScheme.primary else textColor,
-                        modifier = Modifier.size(28.dp),
-                    )
-                }
+                return Offset.Zero
             }
 
-            Spacer(Modifier.height(8.dp))
-            if (track.isLive) {
-                Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFF4D4D)))
-                    Spacer(Modifier.width(6.dp))
-                    Text("LIVE", style = MaterialTheme.typography.labelLarge, color = textColor)
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (dragY.value <= 0f) return Velocity.Zero
+                if (dragY.value > closeThreshold || available.y > 2500f) {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClose()
+                } else {
+                    dragY.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
                 }
-            } else {
-                SeekBar(player, vm::seekTo, textColor, soft)
+                return available
             }
+        }
+    }
 
-            // Main controls
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = vm::toggleShuffle) {
-                    Icon(Icons.Rounded.Shuffle, "Shuffle", tint = if (player.shuffle) MaterialTheme.colorScheme.primary else textColor)
+    // ---- Swipe the cover left/right to change song (like Spotify).
+    val artDragX = remember { Animatable(0f) }
+    val artSwipe = Modifier.pointerInput(track.key) {
+        val threshold = size.width * 0.28f
+        detectHorizontalDragGestures(
+            onDragEnd = {
+                scope.launch {
+                    val x = artDragX.value
+                    when {
+                        x < -threshold && player.hasNext -> { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); vm.next() }
+                        x > threshold -> { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); vm.previousSong() }
+                    }
+                    artDragX.animateTo(0f, tween(250, easing = FastOutSlowInEasing))
                 }
-                IconButton(onClick = vm::previous, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Rounded.SkipPrevious, "Previous", tint = textColor, modifier = Modifier.size(40.dp))
+            },
+            onDragCancel = { scope.launch { artDragX.animateTo(0f) } },
+        ) { change, amount ->
+            change.consume()
+            scope.launch { artDragX.snapTo(artDragX.value + amount) }
+        }
+    }
+
+    val header: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onClose) { Icon(Icons.Rounded.KeyboardArrowDown, "Close player", tint = textColor, modifier = Modifier.size(30.dp)) }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("PLAYING FROM", style = MaterialTheme.typography.labelSmall, color = soft)
+                Text(vm.sourceName(track.sourceId), style = MaterialTheme.typography.labelLarge, color = textColor, maxLines = 1)
+            }
+            IconButton(onClick = { vm.showOptions(track) }) { Icon(Icons.Rounded.MoreVert, "More options", tint = textColor) }
+        }
+    }
+
+    val art: @Composable (Modifier) -> Unit = { m ->
+        Artwork(
+            track.artworkUrl,
+            artModifier
+                .then(m)
+                .aspectRatio(1f)
+                .graphicsLayer {
+                    translationX = artDragX.value
+                    rotationZ = artDragX.value / 60f
+                    alpha = 1f - (kotlin.math.abs(artDragX.value) / (size.width * 1.5f)).coerceIn(0f, 0.6f)
                 }
-                Box(
-                    Modifier.size(68.dp).clip(CircleShape).background(Color.White).clickable(onClick = vm::togglePlay),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (player.isBuffering && !player.isPlaying) {
-                        CircularProgressIndicator(Modifier.size(28.dp), color = Color.Black, strokeWidth = 3.dp)
-                    } else {
+                .then(artSwipe)
+                .semantics { contentDescription = "Cover of ${track.title}. Swipe left for next song, right for previous." },
+            live = track.isLive,
+            corner = 8.dp,
+        )
+    }
+
+    val details: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(track.title, style = MaterialTheme.typography.headlineSmall, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    track.artist,
+                    style = MaterialTheme.typography.titleMedium, color = soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable(
+                        enabled = !track.isLive && track.artist.isNotBlank(),
+                        onClickLabel = "Open artist",
+                    ) { onOpenArtist(track.artist) },
+                )
+            }
+            if (!track.isLive) {
+                LikeButton(isLiked, onToggle = { vm.toggleLike(track) }, idleTint = textColor, size = 28.dp)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        if (track.isLive) {
+            Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFF4D4D)))
+                Spacer(Modifier.width(6.dp))
+                Text("LIVE", style = MaterialTheme.typography.labelLarge, color = textColor)
+            }
+        } else {
+            SeekBar(player, vm::seekTo, textColor, soft)
+        }
+
+        // Main controls
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = vm::toggleShuffle) {
+                Icon(Icons.Rounded.Shuffle, if (player.shuffle) "Shuffle on" else "Shuffle off", tint = if (player.shuffle) MaterialTheme.colorScheme.primary else textColor)
+            }
+            IconButton(onClick = vm::previous, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Rounded.SkipPrevious, "Previous", tint = textColor, modifier = Modifier.size(40.dp))
+            }
+            val playScale by animateFloatAsState(if (player.isPlaying) 1f else 0.94f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "playScale")
+            Box(
+                Modifier
+                    .size(68.dp)
+                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable(onClickLabel = if (player.isPlaying) "Pause" else "Play") {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        vm.togglePlay()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (player.isBuffering && !player.isPlaying) {
+                    CircularProgressIndicator(Modifier.size(28.dp), color = Color.Black, strokeWidth = 3.dp)
+                } else {
+                    Crossfade(player.isPlaying, animationSpec = tween(150), label = "playIcon") { playing ->
                         Icon(
-                            if (player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            if (player.isPlaying) "Pause" else "Play",
+                            if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            if (playing) "Pause" else "Play",
                             tint = Color.Black, modifier = Modifier.size(38.dp),
                         )
                     }
                 }
-                IconButton(onClick = vm::next, enabled = player.hasNext, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Rounded.SkipNext, "Next", tint = if (player.hasNext) textColor else soft.copy(alpha = 0.35f), modifier = Modifier.size(40.dp))
-                }
-                IconButton(onClick = vm::cycleRepeat) {
-                    Icon(
-                        if (player.repeat == RepeatMode.One) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                        "Repeat: ${player.repeat.name}",
-                        tint = if (player.repeat != RepeatMode.Off) MaterialTheme.colorScheme.primary else textColor,
-                    )
-                }
             }
-
-            // Secondary controls
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                IconButton(onClick = { sheet = "sleep" }) {
-                    Icon(Icons.Rounded.Bedtime, "Sleep timer", tint = if (sleep != null) MaterialTheme.colorScheme.primary else soft)
-                }
-                if (!track.isLive) {
-                    TextButton(onClick = { sheet = "speed" }) {
-                        Icon(Icons.Rounded.Speed, null, tint = if (player.speed != 1f) MaterialTheme.colorScheme.primary else soft, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("${trimSpeed(player.speed)}×", color = if (player.speed != 1f) MaterialTheme.colorScheme.primary else soft)
-                    }
-                }
-                IconButton(onClick = vm::openEqualizer) { Icon(Icons.Rounded.Equalizer, "Equalizer", tint = soft) }
-                IconButton(onClick = {
-                    val text = if (track.isLive) track.title else "${track.title} – ${track.artist}"
-                    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share song"))
-                }) { Icon(Icons.Rounded.Share, "Share", tint = soft) }
-                IconButton(onClick = { sheet = "queue" }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", tint = soft) }
+            IconButton(onClick = vm::next, enabled = player.hasNext, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Rounded.SkipNext, "Next", tint = if (player.hasNext) textColor else soft.copy(alpha = 0.35f), modifier = Modifier.size(40.dp))
             }
+            IconButton(onClick = vm::cycleRepeat) {
+                Icon(
+                    if (player.repeat == RepeatMode.One) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                    "Repeat: ${player.repeat.name}",
+                    tint = if (player.repeat != RepeatMode.Off) MaterialTheme.colorScheme.primary else textColor,
+                )
+            }
+        }
 
+        // Secondary controls
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            IconButton(onClick = { sheet = "sleep" }) {
+                Icon(Icons.Rounded.Bedtime, "Sleep timer", tint = if (sleep != null) MaterialTheme.colorScheme.primary else soft)
+            }
             if (!track.isLive) {
-                Spacer(Modifier.height(20.dp))
-                LyricsCard(lyricsState, player.positionMs, tint, onMore = { fullLyrics = true }, onSeek = vm::seekTo)
+                TextButton(onClick = { sheet = "speed" }) {
+                    Icon(Icons.Rounded.Speed, null, tint = if (player.speed != 1f) MaterialTheme.colorScheme.primary else soft, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${trimSpeed(player.speed)}×", color = if (player.speed != 1f) MaterialTheme.colorScheme.primary else soft)
+                }
             }
-            Spacer(Modifier.height(24.dp))
+            IconButton(onClick = vm::openEqualizer) { Icon(Icons.Rounded.Equalizer, "Equalizer", tint = soft) }
+            IconButton(onClick = {
+                val text = if (track.isLive) track.title else "${track.title} – ${track.artist}"
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share song"))
+            }) { Icon(Icons.Rounded.Share, "Share", tint = soft) }
+            IconButton(onClick = { sheet = "queue" }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", tint = soft) }
+        }
+
+        if (!track.isLive) {
+            Spacer(Modifier.height(20.dp))
+            LyricsCard(lyricsState, player.positionMs, tint, onMore = { fullLyrics = true }, onSeek = vm::seekTo)
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                translationY = dragY.value
+                // Shrink and round a little while being pulled down, like a card.
+                val p = (dragY.value / (closeThreshold * 3)).coerceIn(0f, 0.08f)
+                scaleX = 1f - p
+                scaleY = 1f - p
+            }
+            .clip(RoundedCornerShape(with(density) { (dragY.value / 6f).coerceAtMost(28.dp.toPx()).toDp() }))
+            .background(Brush.verticalGradient(listOf(top, top.copy(alpha = 0.6f).compositeOver(Color(0xFF121212)), Color(0xFF121212))))
+            .clickable(enabled = false) {},
+    ) {
+        // Wide windows (landscape, tablets): cover on the left, controls on the right.
+        val wide = maxWidth >= 600.dp && maxWidth > maxHeight
+        if (wide) {
+            Row(
+                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(32.dp),
+            ) {
+                Column(Modifier.weight(0.9f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+                    header()
+                    Spacer(Modifier.height(12.dp))
+                    Box(Modifier.weight(1f, fill = false), contentAlignment = Alignment.Center) { art(Modifier.fillMaxHeight()) }
+                }
+                Column(
+                    Modifier.weight(1.1f).fillMaxHeight().nestedScroll(dismissConnection).verticalScroll(rememberScrollState()),
+                ) {
+                    Spacer(Modifier.height(24.dp))
+                    details()
+                }
+            }
+        } else {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .nestedScroll(dismissConnection)
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp),
+            ) {
+                header()
+                Spacer(Modifier.height(28.dp))
+                art(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(28.dp))
+                details()
+            }
         }
     }
 
@@ -407,7 +563,7 @@ private fun QueueSheet(vm: MainViewModel, onClose: () -> Unit) {
                         )
                     }
                     Row(
-                        Modifier.fillMaxWidth().clickable { vm.playQueueItem(i) }.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        Modifier.animateItem().fillMaxWidth().clickable(onClickLabel = "Play this song") { vm.playQueueItem(i) }.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (i == current) {

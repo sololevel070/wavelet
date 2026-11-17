@@ -51,6 +51,8 @@ Coroutines 1.9 (+guava), Coil 2.7, Palette 1.0.
 - `player/AudioFxController.kt` – in-app 5-band Equalizer, presets, Bass Boost, and Virtualizer.
 - `player/PlayerConnection.kt` (MediaController wrapper, queue, repeat/shuffle/speed),
   `QueueStore.kt`, `PlayerWidget.kt` (AppWidget + updater), `LyricsOverlay.kt` (View-based overlay).
+- `io/FolderScanner.kt` – scans a user-picked folder (DocumentsContract), reads tags; folder playlists store `PlaylistEntity.folderUri` (Room migration 1→2).
+- `ui/OnboardingScreen.kt`, `ui/AboutScreen.kt`; `MainViewModel.starting` (song being loaded), `busy` (progress dialog), `ready` (splash waits on it).
 - `ui/` – `MainViewModel` (single VM for everything), `AppRoot` (NavHost + bottom bar + mini
   player + overlays), screens: Home, Search, Library, Collections (playlist/liked/downloads/
   device/album/artist/history), NowPlaying, Settings, Sources, Stats, Import; `Sheets.kt`

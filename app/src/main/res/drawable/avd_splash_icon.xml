@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 432dp canvas; the bars sit inside the central 192dp circle that the splash screen keeps visible. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="432dp"
+    android:height="432dp"
+    android:viewportWidth="432"
+    android:viewportHeight="432">
+    <group android:name="bar1" android:pivotX="148" android:pivotY="216">
+        <path android:fillColor="#FF8B7CFF" android:pathData="M138,186h20v60h-20z" />
+    </group>
+    <group android:name="bar2" android:pivotX="182" android:pivotY="216">
+        <path android:fillColor="#FF8B7CFF" android:pathData="M172,166h20v100h-20z" />
+    </group>
+    <group android:name="bar3" android:pivotX="216" android:pivotY="216">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M206,146h20v140h-20z" />
+    </group>
+    <group android:name="bar4" android:pivotX="250" android:pivotY="216">
+        <path android:fillColor="#FF8B7CFF" android:pathData="M240,166h20v100h-20z" />
+    </group>
+    <group android:name="bar5" android:pivotX="284" android:pivotY="216">
+        <path android:fillColor="#FF8B7CFF" android:pathData="M274,186h20v60h-20z" />
+    </group>
+</vector>

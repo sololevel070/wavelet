@@ -54,6 +54,21 @@ class LibraryRepository(private val dao: LibraryDao) {
     suspend fun createPlaylist(name: String, description: String = ""): Long =
         dao.insertPlaylist(PlaylistEntity(name = name.trim().ifBlank { "New playlist" }, description = description.trim()))
 
+    /** Creates a playlist linked to a folder and fills it with [tracks]. */
+    suspend fun createFolderPlaylist(name: String, folderUri: String, tracks: List<Track>): Long {
+        val id = dao.insertPlaylist(PlaylistEntity(name = name.trim().ifBlank { "Music folder" }, description = "From a folder on this phone", folderUri = folderUri))
+        addTracks(id, tracks)
+        return id
+    }
+
+    /** Adds the tracks from a re-scan that aren't in the playlist yet; returns how many were added. */
+    suspend fun addNewTracks(playlistId: Long, tracks: List<Track>): Int {
+        val have = dao.playlistItemsNow(playlistId).mapNotNull { it.trackKey }.toSet()
+        val fresh = tracks.filter { it.key !in have }
+        addTracks(playlistId, fresh)
+        return fresh.size
+    }
+
     suspend fun renamePlaylist(id: Long, name: String, description: String) =
         dao.renamePlaylist(id, name.trim().ifBlank { "Untitled" }, description.trim())
 

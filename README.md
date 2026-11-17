@@ -1,8 +1,12 @@
 # Wavelet
 
-An Android music player built around pluggable **sources**, inspired by the design of
-Soundbound (a core player plus sources listed in a repo index). Written from scratch;
-no Soundbound code is used.
+An open-source Android music player (Kotlin + Jetpack Compose) with a Spotify-style UI: dark-first theme, Home / Search / Your Library tabs, and artwork-tinted Now Playing. Built around pluggable **sources** listed in a repo index — add local files, internet radio, Jamendo, Navidrome/Subsonic, Jellyfin, Plex, and more.
+
+Written from scratch; no Soundbound or Spotify code is used. The Spotify Mobile UI Kit was used only as a visual reference — Wavelet has its own design and violet accent (#8B7CFF).
+
+## Screenshots
+
+> Screenshots of the running app coming soon. In the meantime, the UI follows the Spotify-style layout: bottom navigation (Home, Search, Your Library), artwork-tinted Now Playing and mini player, and a dark-first theme with violet (#8B7CFF) accents.
 
 ## Features
 
@@ -13,6 +17,14 @@ no Soundbound code is used.
 - Each imported song is matched to your sources; unmatched songs stay in the playlist with a "Fix match" picker
 - Export playlists as Wavelet JSON, M3U8, CSV or XSPF (server login tokens are never written out), or share as text
 - Backup and restore of playlists, likes, history and sources (passwords and tokens are left out)
+
+**Folders, ZIP and flow (v0.4)**
+- Library › + › "Add music folder": pick any folder (sub-folders included) and it becomes a playlist; "Sync folder" adds songs added later
+- Playlist menu › "Export as ZIP": the songs stored on the phone plus a playlist file (M3U8), a CSV song list and not-included.txt
+- "Re-scan" retries matching for imported songs marked "Not found"
+- Bottom tabs always open on their main screen; Settings, playlists etc. open above the tab they came from; back from Search/Library returns to Home
+- A tapped song shows a spinner on its row and in the mini player until it plays; skeleton placeholders while shelves and search results load
+- System splash screen (animated icon), a 3-page welcome tour on first launch, an About screen, and 300 ms Material-style transitions (fade-through between tabs, shared-axis slide for deeper screens)
 
 **Playback**
 - Background playback with notification, lock-screen and headset controls (Media3)
@@ -125,3 +137,11 @@ app/src/main/java/app/wavelet/
 ```
 
 Covers playlist import/export (CSV, M3U, JSPF, Wavelet JSON), token stripping on export, song matching and LRC parsing.
+
+## Contributing
+
+Wavelet is open for public contributions. Fork the repo, create a branch, and open a pull request. Please keep UI copy plain and short (sentence case), and don't ship downloaded plugin code — repos only enable built-in engines.
+
+## License
+
+MIT License

@@ -10,10 +10,12 @@ import app.wavelet.io.TrackMatcher
 import app.wavelet.source.LyricsRepository
 import app.wavelet.source.RepoManager
 import app.wavelet.source.SourceRegistry
+import app.wavelet.ytdlp.YtDlp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class WaveletApp : Application() {
     lateinit var container: AppContainer
@@ -30,8 +32,17 @@ class AppContainer(app: Application) {
     /** Scope for work that should outlive a screen, such as downloads and imports. */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val store = AppStore(app)
-    val downloads = DownloadRepository(app)
+    val downloads = DownloadRepository(app) { store.state.value.settings }
     val sources = SourceRegistry(app, store, downloads)
+
+    init {
+        // Warm up yt-dlp and apply the user's cookie/argument settings.
+        appScope.launch(Dispatchers.IO) {
+            val settings = store.state.value.settings
+            YtDlp.configure(app, settings.ytCookies, settings.ytExtraArgs)
+            YtDlp.ensureInitialized(app)
+        }
+    }
     val repos = RepoManager()
     val database = WaveletDatabase.create(app)
     val library = LibraryRepository(database.dao())

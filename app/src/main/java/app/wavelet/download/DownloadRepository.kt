@@ -3,10 +3,12 @@ package app.wavelet.download
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import app.wavelet.data.Settings
 import app.wavelet.net.Http
 import app.wavelet.net.HttpException
 import app.wavelet.source.Stream
 import app.wavelet.source.Track
+import app.wavelet.ytdlp.YtDlp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,10 @@ const val DOWNLOADS_SOURCE_ID = "downloads"
  * Saves tracks to the app's own music folder and keeps an index of them. A downloaded track
  * keeps its original key as its id, so the app can prefer the offline copy when playing.
  */
-class DownloadRepository(context: Context) {
+class DownloadRepository(
+    private val context: Context,
+    private val settings: () -> Settings = { Settings() },
+) {
     private val dir = File(
         context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: File(context.filesDir, "music"),
         "Wavelet",
@@ -57,6 +62,10 @@ class DownloadRepository(context: Context) {
         val key = track.key
         _progress.update { it + (key to -1f) }
         try {
+            if (stream.url.startsWith(YtDlp.DOWNLOAD_PREFIX)) {
+                downloadWithYtDlp(track, stream.url.removePrefix(YtDlp.DOWNLOAD_PREFIX))
+                return@withContext
+            }
             Http.client.newCall(Request.Builder().url(stream.url).build()).execute().use { response ->
                 if (!response.isSuccessful) throw HttpException(response.code, stream.url)
                 val body = response.body ?: throw IOException("Empty response")
@@ -98,6 +107,52 @@ class DownloadRepository(context: Context) {
             }
         } finally {
             _progress.update { it - key }
+        }
+    }
+
+    private suspend fun downloadWithYtDlp(track: Track, videoId: String) {
+        val key = track.key
+        val s = settings()
+        val fmt = when (s.ytAudioFormat) {
+            app.wavelet.data.YtAudioFormat.Mp3 -> "mp3"
+            app.wavelet.data.YtAudioFormat.M4a -> "m4a"
+            app.wavelet.data.YtAudioFormat.Opus -> "opus"
+            else -> "best"
+        }
+        val base = safeName(
+            if (track.title.contains(track.artist, ignoreCase = true)) track.title
+            else "${track.artist} - ${track.title}",
+        )
+        val tempDir = File(context.cacheDir, "ytdl/${key.hashCode().toUInt()}").apply { mkdirs() }
+        try {
+            val produced = YtDlp.downloadTo(
+                urlOrId = videoId,
+                targetDirectory = tempDir,
+                baseName = base,
+                format = fmt,
+                embedMetadata = s.ytEmbedMetadata,
+                embedThumbnail = s.ytEmbedThumbnail,
+                sponsorBlock = s.ytSponsorBlock,
+                onProgress = { p -> _progress.update { it + (key to p) } },
+            )
+            val ext = produced.extension.ifBlank { if (fmt == "best") "m4a" else fmt }
+            val file = uniqueFile(base, ext)
+            if (!produced.renameTo(file)) {
+                produced.copyTo(file, overwrite = true)
+                produced.delete()
+            }
+            val saved = track.copy(
+                id = key,
+                sourceId = DOWNLOADS_SOURCE_ID,
+                streamUrl = Uri.fromFile(file).toString(),
+                downloadable = false,
+            )
+            synchronized(this@DownloadRepository) {
+                _items.update { list -> list.filterNot { it.id == key } + saved }
+                saveIndex()
+            }
+        } finally {
+            tempDir.deleteRecursively()
         }
     }
 

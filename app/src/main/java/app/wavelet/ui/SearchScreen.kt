@@ -19,6 +19,13 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -116,9 +123,9 @@ fun SearchScreen(vm: MainViewModel, nav: NavHostController) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { FilterChip(selected = state.filter == null, onClick = { vm.setFilter(null) }, label = { Text("All") }) }
+            item { FilterChip(selected = state.filter == null, onClick = { focus.clearFocus(); vm.setFilter(null) }, label = { Text("All") }) }
             items(sources, key = { it.id }) { s ->
-                FilterChip(selected = state.filter == s.id, onClick = { vm.setFilter(s.id) }, label = { Text(s.name) })
+                FilterChip(selected = state.filter == s.id, onClick = { focus.clearFocus(); vm.setFilter(s.id) }, label = { Text(s.name) })
             }
         }
 
@@ -140,7 +147,7 @@ fun SearchScreen(vm: MainViewModel, nav: NavHostController) {
                 }
                 when {
                     section.loading -> item(key = "loading-${section.sourceId}") {
-                        Box(Modifier.fillMaxWidth().padding(16.dp)) { CircularProgressIndicator(Modifier.size(22.dp)) }
+                        SongRowSkeleton(2)
                     }
                     section.error != null -> item(key = "error-${section.sourceId}") {
                         Text(section.error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))

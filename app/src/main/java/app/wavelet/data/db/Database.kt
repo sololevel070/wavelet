@@ -48,6 +48,8 @@ data class PlaylistEntity(
     val description: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
+    /** Set when the playlist was made from a folder on the phone; used by "Sync folder". */
+    val folderUri: String? = null,
 )
 
 /**
@@ -272,7 +274,7 @@ interface LibraryDao {
 
 @Database(
     entities = [TrackEntity::class, PlaylistEntity::class, PlaylistItemEntity::class, LikeEntity::class, HistoryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class WaveletDatabase : RoomDatabase() {
@@ -280,6 +282,15 @@ abstract class WaveletDatabase : RoomDatabase() {
 
     companion object {
         fun create(context: Context): WaveletDatabase =
-            Room.databaseBuilder(context, WaveletDatabase::class.java, "wavelet.db").build()
+            Room.databaseBuilder(context, WaveletDatabase::class.java, "wavelet.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
+
+        /** Adds the linked-folder column; existing playlists keep all their data. */
+        private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE playlists ADD COLUMN folderUri TEXT")
+            }
+        }
     }
 }

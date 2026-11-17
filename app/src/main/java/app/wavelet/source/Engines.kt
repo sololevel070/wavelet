@@ -16,6 +16,7 @@ import app.wavelet.source.impl.SongLinkSource
 import app.wavelet.source.impl.SpotifySource
 import app.wavelet.source.impl.SubsonicSource
 import app.wavelet.source.impl.YouTubeMusicSource
+import app.wavelet.source.impl.YtDlpSource
 
 data class OptionSpec(
     val key: String,
@@ -48,9 +49,8 @@ object Engines {
         EngineInfo("local", "On this device", "Music files stored on this phone."),
         EngineInfo("downloads", "Downloads", "Tracks you downloaded in Wavelet."),
         EngineInfo(
-            "youtube_music", "YouTube Music",
-            "Stream and download songs, albums, and artists from YouTube Music.",
-            listOf(OptionSpec("piped_url", "Piped instance URL (optional)", hint = "https://pipedapi.kavin.rocks")),
+            "youtube_music", "YouTube / yt-dlp",
+            "Search songs or paste any YouTube URL to stream and download audio (powered by yt-dlp).",
         ),
         EngineInfo(
             "spotify", "Spotify",
@@ -92,7 +92,7 @@ object Engines {
         return when (cfg.engine) {
             "local" -> LocalSource(cfg.instanceId, cfg.name, context)
             "downloads" -> DownloadsSource(cfg.instanceId, cfg.name, downloads)
-            "youtube_music" -> YouTubeMusicSource(cfg.instanceId, cfg.name, o["piped_url"]?.takeIf { it.isNotBlank() } ?: "https://pipedapi.kavin.rocks")
+            "youtube_music" -> YtDlpSource(cfg.instanceId, cfg.name, context)
             "spotify" -> SpotifySource(cfg.instanceId, cfg.name, o["client_id"].orEmpty(), o["client_secret"].orEmpty())
             "jamendo" -> JamendoSource(cfg.instanceId, cfg.name, o.getValue("client_id"))
             "internet_archive" -> InternetArchiveSource(cfg.instanceId, cfg.name)

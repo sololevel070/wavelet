@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Used once the app is running: dark window so there is no white flash. -->
+    <style name="Theme.Wavelet" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/wavelet_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Launch theme: the system splash screen (Android 12+, and the compat library below that). -->
+    <style name="Theme.Wavelet.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/wavelet_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/avd_splash</item>
+        <item name="windowSplashScreenAnimationDuration">900</item>
+        <item name="postSplashScreenTheme">@style/Theme.Wavelet</item>
+    </style>
+</resources>

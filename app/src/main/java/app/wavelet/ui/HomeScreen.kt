@@ -19,6 +19,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -158,8 +166,7 @@ fun HomeScreen(vm: MainViewModel, nav: NavHostController) {
             item(key = "featured-${section.sourceId}") {
                 when {
                     section.loading -> {
-                        SectionTitle("Popular on ${section.sourceName}")
-                        Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp)) }
+                        ShelfSkeleton()
                     }
                     section.tracks.isNotEmpty() -> TrackShelf(
                         vm,

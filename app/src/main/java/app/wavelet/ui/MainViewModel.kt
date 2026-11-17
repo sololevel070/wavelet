@@ -61,7 +61,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import app.wavelet.io.FOLDER_SOURCE_ID
+import app.wavelet.io.FolderScanner
+import java.io.BufferedOutputStream
 import java.net.UnknownHostException
+import java.util.zip.Deflater
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import java.util.Calendar
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -119,6 +125,9 @@ data class FixMatchState(
 
 data class SleepTimer(val endsAt: Long, val label: String)
 
+/** A long task that shows a progress dialog (folder scan, re-scan, zip export). */
+data class BusyState(val title: String, val message: String = "", val done: Int = 0, val total: Int = 0)
+
 data class LbState(val loading: Boolean = false, val playlists: List<ListenBrainzPlaylist> = emptyList(), val error: String? = null)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -150,7 +159,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ================================================================ player
 
-    private val conn = PlayerConnection(app, viewModelScope, ::say)
+    private val conn = PlayerConnection(app, viewModelScope) { message ->
+        _starting.value = null
+        say(message)
+    }
+
+    /**
+     * The song the user just tapped, from the moment of the tap until it is actually playing.
+     * The UI uses it to show the mini player and a loading spinner straight away, instead of
+     * leaving a silent gap while the stream address is looked up.
+     */
+    private val _starting = MutableStateFlow<Track?>(null)
+    val starting: StateFlow<Track?> = _starting.asStateFlow()
+
+    private val _ready = MutableStateFlow(false)
+    /** True once the app has restored its state; the system splash screen waits for this. */
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
+    private val _busy = MutableStateFlow<BusyState?>(null)
+    val busy: StateFlow<BusyState?> = _busy.asStateFlow()
     val player: StateFlow<PlayerUiState> = conn.state
     val queue: StateFlow<List<QueueEntry>> = conn.queue
 
@@ -170,6 +197,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun sourceName(sourceId: String): String = when (sourceId) {
         DOWNLOADS_SOURCE_ID -> "Downloads"
         WEB_SOURCE_ID -> "Web link"
+        FOLDER_SOURCE_ID -> "Folder"
         else -> c.sources.get(sourceId)?.name
             ?: appState.value.sources.firstOrNull { it.instanceId == sourceId }?.name ?: sourceId
     }
@@ -191,9 +219,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         queueJob?.cancel()
         _radioSeed.value = null
+        val startTrack = ordered[start]
+        _starting.value = startTrack
+        viewModelScope.launch {
+            // Safety net: never leave the spinner up for good if something goes wrong.
+            delay(25_000)
+            if (_starting.value?.key == startTrack.key) _starting.value = null
+        }
         queueJob = viewModelScope.launch {
             val controller = conn.connect()
-            val first = resolve(ordered[start]) ?: return@launch
+            val first = resolve(startTrack) ?: run {
+                if (_starting.value?.key == startTrack.key) _starting.value = null
+                return@launch
+            }
             controller.shuffleModeEnabled = false
             controller.setMediaItem(first)
             controller.prepare()
@@ -310,6 +348,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun next() { conn.now?.seekToNext() }
     fun previous() { conn.now?.seekToPrevious() }
+    /** Always the song before (used by swipes); [previous] restarts the song if it has played a while. */
+    fun previousSong() { conn.now?.let { if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem() else it.seekTo(0) } }
     fun seekTo(ms: Long) { conn.now?.seekTo(ms); conn.refresh() }
     fun toggleShuffle() { conn.now?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
     fun cycleRepeat() = conn.setRepeat(
@@ -693,6 +733,175 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeFixMatch() { _fixMatch.value = null }
 
+    // ---------------------------------------------------------------- folders, re-scan, zip
+
+    private val folderScanner = FolderScanner(app)
+
+    /** Turns a folder the user picked into a playlist of the audio files inside it. */
+    fun addFolderPlaylist(treeUri: Uri, onDone: (Long) -> Unit) {
+        val ctx = getApplication<Application>()
+        // Keep access to the folder after the app restarts.
+        runCatching { ctx.contentResolver.takePersistableUriPermission(treeUri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        viewModelScope.launch {
+            val name = runCatching { folderScanner.folderName(treeUri) }.getOrDefault("Music folder")
+            _busy.value = BusyState("Scanning \"$name\"", "Looking for songs…")
+            val result = attempt {
+                folderScanner.scan(treeUri) { found ->
+                    _busy.value = BusyState("Scanning \"$name\"", "Found $found songs…", found, 0)
+                }
+            }
+            _busy.value = null
+            val tracks = result.getOrNull()
+            when {
+                tracks == null -> say("Couldn't read that folder: ${friendly(result.exceptionOrNull()!!)}")
+                tracks.isEmpty() -> say("No music files found in \"$name\"")
+                else -> {
+                    val id = library.createFolderPlaylist(name, treeUri.toString(), tracks)
+                    say("Added ${tracks.size} songs from \"$name\"")
+                    onDone(id)
+                }
+            }
+        }
+    }
+
+    /** Re-reads a folder playlist's folder and adds songs that were added to it since. */
+    fun syncFolder(playlistId: Long) {
+        viewModelScope.launch {
+            val playlist = library.playlistNow(playlistId) ?: return@launch
+            val folder = playlist.folderUri ?: return@launch say("This playlist isn't linked to a folder")
+            _busy.value = BusyState("Syncing \"${playlist.name}\"", "Looking for new songs…")
+            val result = attempt {
+                folderScanner.scan(Uri.parse(folder)) { found ->
+                    _busy.value = BusyState("Syncing \"${playlist.name}\"", "Checked $found songs…", found, 0)
+                }
+            }
+            _busy.value = null
+            val tracks = result.getOrNull() ?: return@launch say("Couldn't read the folder: ${friendly(result.exceptionOrNull()!!)}. Pick it again with Add music folder.")
+            val added = library.addNewTracks(playlistId, tracks)
+            say(if (added == 0) "Already up to date" else "Added $added new songs")
+        }
+    }
+
+    /** Tries again to match the songs in a playlist that were marked "Not found". */
+    fun rescanUnmatched(playlistId: Long) {
+        viewModelScope.launch {
+            val missing = library.playlistItemsNow(playlistId).filter { it.track == null }
+            if (missing.isEmpty()) return@launch say("Every song in this playlist is already matched")
+            val entries = missing.map { PlaylistEntry(it.itemTitle, it.itemArtist, it.itemAlbum, it.itemDurationMs) }
+            _busy.value = BusyState("Looking for ${missing.size} songs", "Searching your sources…", 0, missing.size)
+            val matches = c.matcher.matchAll(entries, List(entries.size) { null }) { done, total ->
+                _busy.value = BusyState("Looking for ${missing.size} songs", "Searching your sources…", done, total)
+            }
+            var found = 0
+            missing.forEachIndexed { i, item ->
+                matches[i]?.let {
+                    library.setMatch(playlistId, item.itemId, it)
+                    found++
+                }
+            }
+            _busy.value = null
+            say(if (found == 0) "Still couldn't find those songs. Add the files to your phone or turn on more sources." else "Matched $found of ${missing.size} songs")
+        }
+    }
+
+    /**
+     * Saves the playlist's songs that are stored on this phone into a ZIP file, with a playlist
+     * file (M3U8) that plays them in order and a CSV list of every song. Songs that only stream
+     * from the internet can't be packed; they are listed in the CSV and in not-included.txt.
+     */
+    fun exportPlaylistZip(playlistId: Long, target: Uri) {
+        val ctx = getApplication<Application>()
+        viewModelScope.launch {
+            val playlist = library.playlistNow(playlistId) ?: return@launch
+            val items = library.playlistItemsNow(playlistId)
+            _busy.value = BusyState("Creating ZIP", "Packing songs…", 0, items.size)
+            val result = attempt {
+                withContext(Dispatchers.IO) {
+                    var included = 0
+                    val skipped = mutableListOf<String>()
+                    val m3u = StringBuilder("#EXTM3U\n#PLAYLIST:${playlist.name}\n")
+                    val width = items.size.toString().length.coerceAtLeast(2)
+                    val out = ctx.contentResolver.openOutputStream(target, "wt") ?: error("Couldn't write the file")
+                    ZipOutputStream(BufferedOutputStream(out)).use { zip ->
+                        zip.setLevel(Deflater.NO_COMPRESSION) // audio is already compressed
+                        val used = HashSet<String>()
+                        items.forEachIndexed { i, item ->
+                            val track = item.track
+                            val local = track?.let { t -> c.downloads.find(t.key)?.streamUrl ?: t.streamUrl }
+                                ?.takeIf { it.startsWith("content://") || it.startsWith("file://") }
+                            if (track == null || local == null) {
+                                skipped += "${item.itemArtist} - ${item.itemTitle}".trim(' ', '-')
+                            } else {
+                                val uri = Uri.parse(local)
+                                val ext = audioExtension(ctx, uri)
+                                val base = "%0${width}d - %s".format(i + 1, safeName("${track.artist} - ${track.title}"))
+                                var entryName = "$base.$ext"
+                                var n = 2
+                                while (!used.add(entryName)) entryName = "$base ($n).$ext".also { n++ }
+                                val input = runCatching { ctx.contentResolver.openInputStream(uri) }.getOrNull()
+                                if (input == null) {
+                                    skipped += "${track.artist} - ${track.title} (file not readable)"
+                                } else {
+                                    zip.putNextEntry(ZipEntry(entryName))
+                                    input.use { it.copyTo(zip) }
+                                    zip.closeEntry()
+                                    included++
+                                    m3u.append("#EXTINF:${(track.durationMs ?: -1) / 1000},${track.artist} - ${track.title}\n$entryName\n")
+                                }
+                            }
+                            _busy.value = BusyState("Creating ZIP", "Packing songs…", i + 1, items.size)
+                        }
+                        zip.putNextEntry(ZipEntry("playlist.m3u8")); zip.write(m3u.toString().toByteArray()); zip.closeEntry()
+                        val rows = items.map { i ->
+                            val t = i.track
+                            PlaylistFormats.ExportRow(t?.title ?: i.itemTitle, t?.artist ?: i.itemArtist, t?.album ?: i.itemAlbum, t?.durationMs ?: i.itemDurationMs, t, t?.let { sourceName(it.sourceId) })
+                        }
+                        zip.putNextEntry(ZipEntry("songs.csv"))
+                        zip.write(PlaylistFormats.export(ExportFormat.Csv, playlist.name, playlist.description, rows).toByteArray())
+                        zip.closeEntry()
+                        if (skipped.isNotEmpty()) {
+                            zip.putNextEntry(ZipEntry("not-included.txt"))
+                            zip.write(("These songs are not stored on the phone, so they are not in this ZIP:\n\n" + skipped.joinToString("\n")).toByteArray())
+                            zip.closeEntry()
+                        }
+                    }
+                    included to skipped.size
+                }
+            }
+            _busy.value = null
+            result.onSuccess { (included, skipped) ->
+                say(
+                    when {
+                        included == 0 -> "ZIP saved, but none of these songs are stored on this phone (only the song list is in it)"
+                        skipped == 0 -> "ZIP saved with $included songs"
+                        else -> "ZIP saved with $included songs; $skipped aren't stored on this phone (see not-included.txt)"
+                    },
+                )
+            }.onFailure { say("ZIP failed: ${friendly(it)}") }
+        }
+    }
+
+    private fun safeName(name: String): String =
+        name.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), "_").trim().take(100).ifBlank { "track" }
+
+    private fun audioExtension(ctx: Application, uri: Uri): String {
+        val name = if (uri.scheme == "file") uri.lastPathSegment else runCatching {
+            ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
+        }.getOrNull()
+        name?.substringAfterLast('.', "")?.lowercase()?.takeIf { it.length in 2..5 }?.let { return it }
+        return when (ctx.contentResolver.getType(uri)) {
+            "audio/mpeg" -> "mp3"
+            "audio/mp4", "audio/aac" -> "m4a"
+            "audio/flac", "audio/x-flac" -> "flac"
+            "audio/ogg", "application/ogg" -> "ogg"
+            "audio/opus" -> "opus"
+            "audio/wav", "audio/x-wav" -> "wav"
+            else -> "mp3"
+        }
+    }
+
+    fun finishOnboarding() = updateSettings { it.copy(onboarded = true) }
+
     // ---------------------------------------------------------------- import & export
 
     private val _import = MutableStateFlow<ImportState?>(null)
@@ -1066,7 +1275,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         audioFx.onStateChanged = { st -> _audioFxState.value = st }
-        viewModelScope.launch { attempt { restoreQueue() } }
+        viewModelScope.launch {
+            attempt { restoreQueue() }
+            _ready.value = true
+        }
+        viewModelScope.launch {
+            delay(1500)
+            _ready.value = true
+        }
+        viewModelScope.launch {
+            player.collect { st ->
+                val s = _starting.value
+                if (s != null && st.currentKey == s.key && st.isPlaying) _starting.value = null
+            }
+        }
         viewModelScope.launch {
             currentTrack.map { it?.key }.distinctUntilChanged().collect { loadLyrics(currentTrack.value) }
         }

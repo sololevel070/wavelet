@@ -33,6 +33,11 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -58,11 +63,15 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.9.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.navigation:navigation-compose:2.8.5")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.palette:palette-ktx:1.0.0")
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.17.2")
 
     testImplementation("junit:junit:4.13.2")
 }

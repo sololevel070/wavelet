@@ -16,7 +16,7 @@
         android:icon="@drawable/ic_launcher"
         android:label="Wavelet"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/Theme.Wavelet.Starting"
         android:usesCleartextTraffic="true">
 
         <activity

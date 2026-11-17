@@ -28,6 +28,20 @@ data class SourceConfig(
 @Serializable
 enum class ThemeMode { System, Light, Dark }
 
+/** Audio container used for YouTube downloads. Best keeps the stream's own format. */
+@Serializable
+enum class YtAudioFormat { Best, Opus, M4a, Mp3 }
+
+/** A playlist or channel URL checked for new uploads. */
+@Serializable
+data class WatchedPlaylist(
+    val url: String,
+    val title: String,
+    val knownIds: List<String> = emptyList(),
+    /** Download uploads that were not in [knownIds] the last time this was checked. */
+    val autoDownload: Boolean = true,
+)
+
 @Serializable
 data class Settings(
     val theme: ThemeMode = ThemeMode.Dark,
@@ -41,6 +55,8 @@ data class Settings(
     val recordHistory: Boolean = true,
     /** Prefer downloaded copies when they exist. */
     val preferOffline: Boolean = true,
+    /** The welcome tour has been completed. */
+    val onboarded: Boolean = false,
     /** Show synced lyrics in a bubble over other apps. */
     val floatingLyrics: Boolean = false,
     /** 0 = small, 1 = medium, 2 = large. */
@@ -66,6 +82,18 @@ data class Settings(
     val lastFmScrobble: Boolean = true,
     /** Crossfade duration in seconds between consecutive songs. 0 turns it off. */
     val crossfadeSeconds: Int = 0,
+    /** Container yt-dlp writes when saving YouTube audio. */
+    val ytAudioFormat: YtAudioFormat = YtAudioFormat.Best,
+    val ytEmbedMetadata: Boolean = true,
+    val ytEmbedThumbnail: Boolean = true,
+    /** Cut sponsor, intro, and outro segments out of YouTube downloads. */
+    val ytSponsorBlock: Boolean = false,
+    /** How many downloads run at once. */
+    val ytConcurrent: Int = 2,
+    /** Netscape cookie file contents, used for age-restricted or signed-in videos. */
+    val ytCookies: String = "",
+    /** Extra yt-dlp arguments, appended as-is. */
+    val ytExtraArgs: String = "",
     val equalizerEnabled: Boolean = false,
     val equalizerPreset: Int = -1,
     val bassBoost: Int = 0,
@@ -78,13 +106,14 @@ data class AppState(
     val repos: List<String> = emptyList(),
     val settings: Settings = Settings(),
     val recentSearches: List<String> = emptyList(),
+    val watched: List<WatchedPlaylist> = emptyList(),
 )
 
 object DefaultSources {
     val list = listOf(
         SourceConfig("local", "local", "On this device"),
         SourceConfig("downloads", "downloads", "Downloads"),
-        SourceConfig("youtube_music", "youtube_music", "YouTube Music"),
+        SourceConfig("youtube_music", "youtube_music", "YouTube / yt-dlp"),
         SourceConfig("spotify", "spotify", "Spotify"),
         SourceConfig("internet_archive", "internet_archive", "Internet Archive"),
         SourceConfig("radio_browser", "radio_browser", "Radio Browser"),

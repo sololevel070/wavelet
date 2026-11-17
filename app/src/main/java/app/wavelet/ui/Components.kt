@@ -1,7 +1,22 @@
 package app.wavelet.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import android.graphics.drawable.BitmapDrawable
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -39,9 +54,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -59,6 +78,9 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.runtime.remember
 
 // ---------------------------------------------------------------- artwork
 
@@ -76,19 +98,123 @@ fun Artwork(
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon ?: if (live) Icons.Rounded.Radio else Icons.Rounded.MusicNote,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxSize(0.45f),
-        )
+        // The note icon only shows when there is no picture (or it failed), so covers don't flash
+        // an icon while they load; a plain tile shows instead.
+        var failed by remember(url) { mutableStateOf(false) }
+        if (url == null || failed) {
+            Icon(
+                icon ?: if (live) Icons.Rounded.Radio else Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxSize(0.45f),
+            )
+        }
         if (url != null) {
             AsyncImage(
-                model = url,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(url)
+                    .crossfade(300)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                onError = { failed = true },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+}
+
+// ---------------------------------------------------------------- like button
+
+/** Heart that pops when tapped, with a light vibration (like Spotify's). */
+@Composable
+fun LikeButton(isLiked: Boolean, onToggle: () -> Unit, idleTint: Color, size: Dp = 24.dp) {
+    val haptics = LocalHapticFeedback.current
+    val scale = remember { Animatable(1f) }
+    var previous by remember { mutableStateOf(isLiked) }
+    LaunchedEffect(isLiked) {
+        if (previous != isLiked) {
+            previous = isLiked
+            if (isLiked) {
+                scale.snapTo(0.6f)
+                scale.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMediumLow))
+            } else {
+                scale.snapTo(0.85f)
+                scale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioNoBouncy))
+            }
+        }
+    }
+    IconButton(onClick = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onToggle()
+    }) {
+        Icon(
+            if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            contentDescription = if (isLiked) "Remove from Liked Songs" else "Add to Liked Songs",
+            tint = if (isLiked) MaterialTheme.colorScheme.primary else idleTint,
+            modifier = Modifier.size(size).graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            },
+        )
+    }
+}
+
+// ---------------------------------------------------------------- loading placeholders
+
+/** A soft moving highlight, drawn on placeholder shapes while content loads. */
+fun Modifier.shimmer(): Modifier = composed {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val x by transition.animateFloat(
+        initialValue = -1f, targetValue = 2f,
+        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
+        label = "shimmerX",
+    )
+    val base = MaterialTheme.colorScheme.surfaceContainerHigh
+    val highlight = MaterialTheme.colorScheme.surfaceContainerHighest
+    this.drawWithCache {
+        val brush = Brush.linearGradient(
+            colors = listOf(base, highlight, base),
+            start = Offset(size.width * x, 0f),
+            end = Offset(size.width * x + size.width * 0.6f, size.height * 0.2f),
+        )
+        onDrawBehind { drawRect(brush) }
+    }
+}
+
+/** Placeholder for a shelf of cards while it loads. */
+@Composable
+fun ShelfSkeleton() {
+    Column {
+        Box(Modifier.padding(start = 16.dp, top = 24.dp, bottom = 14.dp).size(width = 180.dp, height = 22.dp).clip(RoundedCornerShape(6.dp)).shimmer())
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            repeat(3) {
+                Column(Modifier.width(148.dp)) {
+                    Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(6.dp)).shimmer())
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.size(width = 110.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).shimmer())
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.size(width = 70.dp, height = 12.dp).clip(RoundedCornerShape(4.dp)).shimmer())
+                }
+            }
+        }
+    }
+}
+
+/** Placeholder for song rows while search results load. */
+@Composable
+fun SongRowSkeleton(count: Int = 3) {
+    Column {
+        repeat(count) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).shimmer())
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Box(Modifier.size(width = 170.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).shimmer())
+                    Spacer(Modifier.height(8.dp))
+                    Box(Modifier.size(width = 110.dp, height = 12.dp).clip(RoundedCornerShape(4.dp)).shimmer())
+                }
+            }
         }
     }
 }
@@ -162,14 +288,33 @@ fun SongRow(
     val liked by vm.likedKeys.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val progress by vm.downloadProgress.collectAsStateWithLifecycle()
-    val isCurrent = player.currentKey == track.key || player.currentKey == track.id
-    val downloaded = track.sourceId == DOWNLOADS_SOURCE_ID || downloads.any { it.id == track.key }
-    val isLiked = track.key in liked || track.id in liked
+    val starting by vm.starting.collectAsStateWithLifecycle()
+    val isStarting = starting?.key == track.key
+    val haptics = LocalHapticFeedback.current
+
+    // Optimized derived states to reduce recomposition
+    val isCurrent by remember(track.key, track.id, player.currentKey) {
+        derivedStateOf { player.currentKey == track.key || player.currentKey == track.id }
+    }
+    val downloaded by remember(track.sourceId, downloads, track.key) {
+        derivedStateOf { track.sourceId == DOWNLOADS_SOURCE_ID || downloads.any { it.id == track.key } }
+    }
+    val isLiked by remember(track.key, liked, track.id) {
+        derivedStateOf { track.key in liked || track.id in liked }
+    }
 
     Row(
         modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = { vm.showOptions(track, playlistId, itemId) })
+            .combinedClickable(
+                onClickLabel = "Play",
+                onLongClickLabel = "More options",
+                onClick = onClick,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    vm.showOptions(track, playlistId, itemId)
+                },
+            )
             .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -181,11 +326,19 @@ fun SongRow(
                 modifier = Modifier.width(28.dp),
             )
         }
-        Artwork(track.artworkUrl, Modifier.size(50.dp), live = track.isLive, corner = 4.dp)
+        Box(contentAlignment = Alignment.Center) {
+            Artwork(track.artworkUrl, Modifier.size(50.dp), live = track.isLive, corner = 4.dp)
+            if (isStarting) {
+                // The song was just tapped and is still loading.
+                Box(Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+                }
+            }
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isCurrent && player.isPlaying) {
+                if (isCurrent && player.isPlaying && !isStarting) {
                     Icon(Icons.Rounded.GraphicEq, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp).padding(end = 4.dp))
                 }
                 Text(
@@ -193,7 +346,7 @@ fun SongRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = if (isCurrent || isStarting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -205,7 +358,7 @@ fun SongRow(
                 if (isLiked) Icon(Icons.Rounded.Favorite, "Liked", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                 if (p != null || downloaded || isLiked) Spacer(Modifier.width(4.dp))
                 Text(
-                    subtitle ?: track.artist,
+                    if (isStarting) "Loading…" else subtitle ?: track.artist,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
