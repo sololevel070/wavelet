@@ -1,0 +1,16 @@
+# CODEOWNERS
+# Wavelet repository - code ownership for review
+
+# Default owner for everything
+*       @sololevel070
+
+# UI files
+*.kt    @sololevel070
+*.xml   @sololevel070
+
+# Design reference (not shipped in app)
+"UI kit"/ @sololevel070
+
+# Security policy
+SECURITY.md @sololevel070
+.github/CODEOWNERS @sololevel070
