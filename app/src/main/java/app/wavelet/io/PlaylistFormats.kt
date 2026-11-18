@@ -88,7 +88,7 @@ object PlaylistFormats {
                 }
             }
         }
-        return ParsedPlaylist(title, entries, entries.map(::webTrack))
+        return ParsedPlaylist(title, entries, entries.map { null })
     }
 
     private fun fileStem(location: String) =
@@ -143,7 +143,7 @@ object PlaylistFormats {
             )
         }
         val title = playlistCol?.let { rows.getOrNull(1)?.getOrNull(it)?.trim() }?.ifBlank { null } ?: name
-        return ParsedPlaylist(title, entries, entries.map(::webTrack))
+        return ParsedPlaylist(title, entries, entries.map { null })
     }
 
     /** "3:45", "1:02:03" or seconds. */
@@ -229,7 +229,7 @@ object PlaylistFormats {
                 }
             }
         }
-        return ParsedPlaylist(title, entries, entries.map(::webTrack))
+        return ParsedPlaylist(title, entries, entries.map { null })
     }
 
     private fun xml(s: String?) = s.orEmpty()
@@ -254,7 +254,7 @@ object PlaylistFormats {
             val title = t.str("title") ?: return@mapNotNull null
             PlaylistEntry(title, t.str("creator").orEmpty(), t.str("album"), t.long("duration"), t.str("location"))
         }
-        return ParsedPlaylist(playlist.str("title") ?: fallbackName, entries, entries.map(::webTrack))
+        return ParsedPlaylist(playlist.str("title") ?: fallbackName, entries, entries.map { null })
     }
 
     // ------------------------------------------------------------------ Spotify & YouTube Web links

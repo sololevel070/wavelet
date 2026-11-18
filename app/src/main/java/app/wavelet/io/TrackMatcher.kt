@@ -32,13 +32,15 @@ class TrackMatcher(private val sources: () -> List<MusicSource>) {
     suspend fun matchAll(
         entries: List<PlaylistEntry>,
         exact: List<Track?>,
+        strict: Boolean = false,
         onProgress: (done: Int, total: Int) -> Unit,
     ): List<Track?> = coroutineScope {
         val limit = Semaphore(4)
         var done = 0
+        val threshold = if (strict) STRICT_ACCEPT else ACCEPT
         entries.mapIndexed { i, entry ->
             async {
-                val result = exact.getOrNull(i) ?: limit.withPermit { best(entry) }
+                val result = exact.getOrNull(i) ?: limit.withPermit { best(entry, threshold) }
                 synchronized(this@TrackMatcher) { done++ }
                 onProgress(done, entries.size)
                 result
@@ -46,9 +48,14 @@ class TrackMatcher(private val sources: () -> List<MusicSource>) {
         }.awaitAll()
     }
 
-    suspend fun best(entry: PlaylistEntry): Track? {
+    suspend fun best(entry: PlaylistEntry): Track? = best(entry, ACCEPT)
+
+    /** Best match using a strict (near 100%) threshold; used for auto-matching during import. */
+    suspend fun bestStrict(entry: PlaylistEntry): Track? = best(entry, STRICT_ACCEPT)
+
+    private suspend fun best(entry: PlaylistEntry, threshold: Double): Track? {
         for (source in matchSources()) {
-            val found = candidates(source, entry).firstOrNull { it.score >= ACCEPT }
+            val found = candidates(source, entry).firstOrNull { it.score >= threshold }
             if (found != null) return found.track
         }
         return null
@@ -78,6 +85,8 @@ class TrackMatcher(private val sources: () -> List<MusicSource>) {
 
     companion object {
         const val ACCEPT = 0.78
+        /** Near-100% match threshold for automatic import matching. */
+        const val STRICT_ACCEPT = 0.95
 
         fun score(entry: PlaylistEntry, t: Track): Double {
             val titleSim = similarity(cleanTitle(entry.title), cleanTitle(t.title))

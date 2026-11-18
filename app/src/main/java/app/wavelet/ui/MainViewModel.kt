@@ -918,7 +918,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } ?: error("Couldn't open the file")
                 PlaylistFormats.parse(name, text)
             }
-            parsed.onSuccess { runImport(it) }
+            parsed.onSuccess { runImport(it, strict = true) }
                 .onFailure { e -> _import.value = ImportState(name, finished = true, error = friendly(e)) }
         }
     }
@@ -945,9 +945,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun importListenBrainz(idOrUrl: String) = importFromLink(idOrUrl)
 
-    private suspend fun runImport(p: ParsedPlaylist) {
+    private suspend fun runImport(p: ParsedPlaylist, strict: Boolean = false) {
         _import.value = ImportState(p.name, 0, p.entries.size)
-        val matches = c.matcher.matchAll(p.entries, p.exact) { done, total ->
+        val matches = c.matcher.matchAll(p.entries, p.exact, strict = strict) { done, total ->
             _import.update { it?.copy(done = done, total = total) }
         }
         val id = library.createPlaylist(p.name, "Imported")
