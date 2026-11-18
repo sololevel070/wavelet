@@ -242,7 +242,7 @@ object PlaylistFormats {
         if (root.str("format") == "wavelet-playlist") {
             val file = Http.json.decodeFromJsonElement(WaveletPlaylistFile.serializer(), root)
             val entries = file.tracks.map { PlaylistEntry(it.title, it.artist, it.album, it.durationMs) }
-            return ParsedPlaylist(file.name, entries, file.tracks.map { it.track })
+            return ParsedPlaylist(file.name, entries, entries.map { null })
         }
         // JSPF, as used by ListenBrainz.
         val playlist = root.at("playlist") ?: error("Unknown JSON playlist format")

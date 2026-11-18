@@ -30,7 +30,7 @@ The UI follows a Spotify-style layout: bottom navigation (Home, Search, Your Lib
 - Playlists: create, rename, describe, reorder, remove songs, delete
 - Liked Songs, Downloads, On this device, Albums and Artists views
 - Import playlists from CSV (Exportify/Spotify, TuneMyMusic, Soundiiz), M3U/M3U8, XSPF, JSPF, Wavelet JSON and ListenBrainz
-- File imports (M3U/M3U8/XSPF/CSV) are matched against your sources with near-100% accuracy so matched songs play directly; unmatched songs stay grayed as "Not found" and can be fixed via the "Fix match" picker or "Re-scan"
+- All file imports (M3U/M3U8/XSPF/CSV/Wavelet JSON/JSPF) are matched against your sources with near-100% accuracy so matched songs play directly; unmatched songs stay grayed as "Not found" and can be fixed via the "Fix match" picker or "Re-scan"
 - Link imports (Spotify, YouTube, ListenBrainz) match songs to your sources the same way
 - Export playlists as Wavelet JSON, M3U8, CSV or XSPF (server login tokens are never written out), or share as text
 - Backup and restore of playlists, likes, history and sources (passwords and tokens are left out)
