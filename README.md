@@ -6,9 +6,9 @@ Written from scratch; no Soundbound or Spotify code is used. The Spotify Mobile 
 
 ## Download
 
-[![Download Wavelet APK](https://img.shields.io/badge/Download-Wavelet%20APK-8B7CFF?style=for-the-badge&logo=android)](https://github.com/sololevel070/wavelet/releases/latest/download/Wavelet-debug.apk)
+[![DOWNLOAD](https://img.shields.io/badge/DOWNLOAD-WAVELET%20APK-8B7CFF?style=for-the-badge&logo=android)](https://github.com/sololevel070/wavelet/releases/latest/download/Wavelet-debug.apk)
 
-[![Get it on GitHub Releases](https://img.shields.io/badge/Releases-Wavelet%20v0.4.0-8B7CFF?style=for-the-badge&logo=github)](https://github.com/sololevel070/wavelet/releases)
+[![RELEASES](https://img.shields.io/badge/RELEASES-WAVELET%20V0.4.0-8B7CFF?style=for-the-badge&logo=github)](https://github.com/sololevel070/wavelet/releases)
 
 > Install the latest debug build directly. Enable "Install from unknown sources" on your device before installing.
 
