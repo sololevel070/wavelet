@@ -16,11 +16,11 @@ Written from scratch; no Soundbound or Spotify code is used. The Spotify Mobile 
 
 | Welcome | Home | On This Device |
 |---------|------|----------------|
-| ![Welcome](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/01-welcome.png) | ![Home](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/02-home.png) | ![On This Device](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/03-on-this-device.png) |
+| <img src="https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/01-welcome.png" alt="Welcome" width="300"> | <img src="https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/02-home.png" alt="Home" width="300"> | <img src="https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/03-on-this-device.png" alt="On This Device" width="300"> |
 
 | Now Playing | Folder Playlist | Search |
 |-------------|-----------------|--------|
-| ![Now Playing](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/04-now-playing.png) | ![Folder Playlist](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/05-folder-playlist.png) | ![Search](https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/06-search.png) |
+| <img src="https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/04-now-playing.png" alt="Now Playing" width="300"> | <img src="https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/05-folder-playlist.png" alt="Folder Playlist" width="300"> | <img src="https://raw.githubusercontent.com/sololevel070/wavelet/main/screenshots/06-search.png" alt="Search" width="300"> |
 
 The UI follows a Spotify-style layout: bottom navigation (Home, Search, Your Library), artwork-tinted Now Playing and mini player, and a dark-first theme with violet (#8B7CFF) accents.
 
